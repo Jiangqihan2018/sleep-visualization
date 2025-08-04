@@ -40,7 +40,7 @@
 
 ### 本地运行
 1. 克隆本仓库到本地
-2. 直接打开`index.html`文件（或项目主HTML文件）即可运行
+2. 直接打开`sleep-visualization.html`文件（或项目主HTML文件）即可运行
 
 ### 线上部署（Gitee/GitHub）
 1. 将项目文件上传至Gitee或GitHub仓库
@@ -49,7 +49,7 @@
 
 ## 项目结构
 sleep-visualization/
-├── index.html           # 主页面文件
+├── sleep-visualization.html           # 主页面文件
 ├── README.md            # 项目说明文档
 └── assets/              # 资源文件（如图片等，可选）
 ## 生理参数映射说明
@@ -60,7 +60,7 @@ sleep-visualization/
 - 元素大小 → 与LF正相关
 - 透明度 → 与HF正相关
 
-具体映射公式可参考页面内的"参数关系表"说明。
+具体映射公式可参考页面论文内容。
 
 ## 许可证
 
