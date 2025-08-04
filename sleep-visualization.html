@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>睡眠阶段动态可视化艺术装置</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'wake-gold': '#FFD700',
+                        'wake-orange': '#FFA500',
+                        'n1-blue': '#87CEEB',
+                        'n2-blue': '#6495ED',
+                        'n2-purple': '#9370DB',
+                        'n3-deepblue': '#00008B',
+                        'n3-indigo': '#4B0082',
+                        'rem-purple': '#800080',
+                        'rem-pink': '#FF69B4',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .canvas-container {
+                position: relative;
+                width: 100%;
+                height: 80vh;
+                background-color: black;
+                overflow: hidden;
+            }
+            .control-panel {
+                background-color: rgba(17, 24, 39, 0.8);
+                backdrop-filter: blur(12px);
+                color: white;
+                padding: 1rem;
+                border-radius: 0.5rem;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                position: absolute;
+                bottom: 1rem;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 10;
+                transition: all 0.3s;
+            }
+            .stage-indicator {
+                display: inline-block;
+                width: 0.75rem;
+                height: 0.75rem;
+                border-radius: 9999px;
+                margin: 0 0.25rem;
+                transition-property: all;
+                transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+                transition-duration: 500ms;
+            }
+            .stage-label {
+                font-weight: 600;
+                margin: 0 0.5rem;
+            }
+            .mini-canvas {
+                width: 100%;
+                height: 100%;
+                border-radius: 0.5rem;
+                border: 1px solid #374151;
+                overflow: hidden;
+            }
+            .stage-window {
+                position: relative;
+                flex: 1 1 0%;
+                margin: 0.5rem;
+                border-radius: 0.5rem;
+                overflow: hidden;
+                transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .stage-window:hover {
+                transform: scale(1.02);
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            }
+            .stage-title {
+                position: absolute;
+                top: 0.5rem;
+                left: 0.5rem;
+                background-color: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(4px);
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.25rem;
+                font-size: 0.75rem;
+                font-weight: 500;
+            }
+            .active-btn {
+                outline: 2px solid rgba(255, 255, 255, 0.5);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="py-4 px-6 bg-gray-800/50 backdrop-blur-sm">
+        <div class="container mx-auto">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-center">睡眠阶段动态可视化艺术装置</h1>
+            <p class="text-center text-gray-300 mt-2">基于"自然生长"概念的睡眠过程视觉化呈现</p>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <div class="canvas-container rounded-xl shadow-2xl" id="mainCanvasContainer">
+            <canvas id="sleepCanvas" class="w-full h-full"></canvas>
+            
+            <div class="control-panel">
+                <div class="flex items-center justify-center mb-3">
+                    <span class="stage-label">当前阶段:</span>
+                    <span id="currentStage" class="text-yellow-400 font-bold">清醒期 (W)</span>
+                </div>
+                
+                <div class="flex justify-center space-x-4 mb-3">
+                    <div class="flex items-center">
+                        <span class="stage-indicator bg-wake-gold/70" id="indicator-w"></span>
+                        <span class="text-sm">清醒</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="stage-indicator bg-n1-blue/30" id="indicator-n1"></span>
+                        <span class="text-sm">N1</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="stage-indicator bg-n2-blue/30" id="indicator-n2"></span>
+                        <span class="text-sm">N2</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="stage-indicator bg-n3-deepblue/30" id="indicator-n3"></span>
+                        <span class="text-sm">N3</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="stage-indicator bg-rem-purple/30" id="indicator-rem"></span>
+                        <span class="text-sm">REM</span>
+                    </div>
+                </div>
+                
+                <div class="flex justify-center space-x-4" id="stageButtons">
+                    <button id="btnWake" class="px-3 py-1 bg-wake-gold/20 hover:bg-wake-gold/40 rounded transition-all flex items-center active-btn">
+                        <i class="fa fa-sun-o mr-2"></i>清醒期
+                    </button>
+                    <button id="btnN1" class="px-3 py-1 bg-n1-blue/20 hover:bg-n1-blue/40 rounded transition-all flex items-center">
+                        <i class="fa fa-moon-o mr-2"></i>N1期
+                    </button>
+                    <button id="btnN2" class="px-3 py-1 bg-n2-blue/20 hover:bg-n2-blue/40 rounded transition-all flex items-center">
+                        <i class="fa fa-cloud mr-2"></i>N2期
+                    </button>
+                    <button id="btnN3" class="px-3 py-1 bg-n3-deepblue/20 hover:bg-n3-deepblue/40 rounded transition-all flex items-center">
+                        <i class="fa fa-bed mr-2"></i>N3期
+                    </button>
+                    <button id="btnREM" class="px-3 py-1 bg-rem-purple/20 hover:bg-rem-purple/40 rounded transition-all flex items-center">
+                        <i class="fa fa-magic mr-2"></i>REM期
+                    </button>
+                    <button id="btnAll" class="px-3 py-1 bg-gray-600/50 hover:bg-gray-500/50 rounded transition-all flex items-center">
+                        <i class="fa fa-th-large mr-2"></i>全景展示
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="allStagesView" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+            <div class="stage-window bg-gray-800/30">
+                <div class="stage-title bg-wake-gold/70">清醒期 (W)</div>
+                <canvas id="miniWake" class="mini-canvas"></canvas>
+            </div>
+            <div class="stage-window bg-gray-800/30">
+                <div class="stage-title bg-n1-blue/70">N1期</div>
+                <canvas id="miniN1" class="mini-canvas"></canvas>
+            </div>
+            <div class="stage-window bg-gray-800/30">
+                <div class="stage-title bg-n2-blue/70">N2期</div>
+                <canvas id="miniN2" class="mini-canvas"></canvas>
+            </div>
+            <div class="stage-window bg-gray-800/30">
+                <div class="stage-title bg-n3-deepblue/70">N3期</div>
+                <canvas id="miniN3" class="mini-canvas"></canvas>
+            </div>
+            <div class="stage-window bg-gray-800/30">
+                <div class="stage-title bg-rem-purple/70">REM期</div>
+                <canvas id="miniREM" class="mini-canvas"></canvas>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl">
+            <h2 class="text-xl font-bold mb-4">关于本艺术装置</h2>
+            <p class="mb-4">这个动态艺术装置将睡眠过程视为一场"微观自然演变"，每个睡眠阶段对应一种自然元素的状态，通过色彩和图案的流动变化来呈现睡眠周期的演变。</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div class="bg-gray-700/30 p-4 rounded-lg">
+                    <h3 class="font-bold text-lg mb-2">设计理念</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <i class="fa fa-leaf text-green-400 mt-1 mr-2"></i>
+                            <span>将睡眠视为自然生长过程，从清醒到沉睡再到梦境，如同植物从白天的活跃到夜晚的休眠</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-paint-brush text-yellow-400 mt-1 mr-2"></i>
+                            <span>通过色彩、图案和动态效果的自然过渡，表现睡眠各阶段之间的渐变关系</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-moon-o text-blue-300 mt-1 mr-2"></i>
+                            <span>使用自然元素如光线、水流、波纹等来象征不同睡眠阶段的生理特征</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="bg-gray-700/30 p-4 rounded-lg">
+                    <h3 class="font-bold text-lg mb-2">睡眠阶段对应</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <span class="inline-block w-3 h-3 rounded-full bg-wake-gold mr-2 mt-1"></span>
+                            <span><strong>清醒期 (W)</strong>: 晨光般的金色光斑，象征大脑活跃</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="inline-block w-3 h-3 rounded-full bg-n1-blue mr-2 mt-1"></span>
+                            <span><strong>N1期</strong>: 金色向淡青蓝过渡的细流线条，意识开始模糊</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="inline-block w-3 h-3 rounded-full bg-n2-blue mr-2 mt-1"></span>
+                            <span><strong>N2期</strong>: 雾蓝色层叠波纹，模拟呼吸节奏</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="inline-block w-3 h-3 rounded-full bg-n3-deepblue mr-2 mt-1"></span>
+                            <span><strong>N3期</strong>: 深海蓝色块缓慢膨胀收缩，象征深度修复</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="inline-block w-3 h-3 rounded-full bg-rem-purple mr-2 mt-1"></span>
+                            <span><strong>REM期</strong>: 绛紫与粉紫的螺旋丝带，代表活跃的梦境</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="py-4 px-6 bg-gray-800/50 backdrop-blur-sm mt-8">
+        <div class="container mx-auto text-center text-gray-400 text-sm">
+            <p>睡眠阶段动态可视化艺术装置 | 基于"自然生长"概念设计</p>
+            <p class="mt-1">可投影在卧室天花板或墙面，随睡眠分期自然过渡</p>
+        </div>
+    </footer>
+
+    <script>
+        // 全局变量
+        let mainCanvas, mainCtx;
+        let currentStage = 'wake';
+        let transitionProgress = 1;
+        let isShowingAllStages = false;
+        let currentStageIndex = 0;
+        let animationFrameId = null;
+        let stageSwitchTimeoutId = null;
+        
+        // 粒子、线条、波纹等对象数组
+        let particles = [];
+        let streams = [];
+        let waves = [];
+        let blocks = [];
+        let spirals = [];
+        
+        // 迷你画布相关变量
+        let miniCanvasesInitialized = false;
+        let miniCanvasAnimations = {};
+
+        // 当DOM完全加载后执行
+        document.addEventListener('DOMContentLoaded', initializeApp);
+        
+        // 窗口大小改变时调整Canvas尺寸
+        window.addEventListener('resize', resizeMainCanvas);
+        
+        // 初始化应用
+        function initializeApp() {
+            try {
+                console.log('初始化应用...');
+                
+                // 初始化主Canvas
+                mainCanvas = document.getElementById('sleepCanvas');
+                mainCtx = mainCanvas.getContext('2d');
+                
+                resizeMainCanvas();
+                
+                // 定义睡眠阶段数据（带HRV动态参数）
+                const sleepStages = {
+                    'wake': {
+                        name: '清醒期 (W)',
+                        color1: '#FFD700',
+                        color2: '#FFA500',
+                        particles: {
+                            get count() { return 150 - 50 * currentHRV.pNN50_norm; }, // pNN50负相关
+                            get speed() { return 2.5 + currentHRV.LFHF_norm; }, // LF/HF正相关
+                            get size() { return 1 + currentHRV.LF_norm * 2; }, 
+                            density: 100,
+                            get transparency() { return 0.2 + currentHRV.HF_norm * 0.8; } // 添加透明度参数
+                        },
+                        hrvMappings: {
+                            LFHF_norm: [0.6, 1.0],   // 标准化范围
+                            pNN50_norm: [0.2, 0.6],
+                            LF_norm: [0.6, 1.0],
+                            HF_norm: [0.6, 1.0]
+                        }
+                    },
+                    'n1': {
+                        name: 'N1期',
+                        color1: '#FFD700',
+                        color2: '#87CEEB',
+                        streams: {
+                            get count() { return 20 + 20 * currentHRV.HF_norm; },
+                            get speed() { return 1.0 + currentHRV.LFHF_norm; },
+                            get width() { return 2.5 - 1.5 * currentHRV.LFHF_norm; },
+                            get splitRate() { return 0.005 + 0.015 * currentHRV.RMSSD_norm; }
+                        },
+                        hrvMappings: {
+                            LFHF_norm: [0.4, 0.6],
+                            HF_norm: [0.2, 0.4],
+                            RMSSD_norm: [0.2, 0.3]
+                        }
+                    },
+                    'n2': {
+                        name: 'N2期',
+                        color1: '#6495ED',
+                        color2: '#9370DB', 
+                        waves: {
+                            get count() { return 3 + 4 * currentHRV.SDNN_norm; },
+                            get amplitude() { return 15 + 10 * currentHRV.HF_norm; },
+                            get frequency() { return 0.007 + 0.006 * currentHRV.LFHF_norm; },
+                            get rippleRate() { return 0.07 - 0.04 * currentHRV.VLF_norm; }
+                        },
+                        hrvMappings: {
+                            HF_norm: [0.5, 0.7],
+                            LFHF_norm: [0.3, 0.5],
+                            SDNN_norm: [0.5, 0.6],
+                            VLF_norm: [0.5, 0.6]
+                        }
+                    },
+                    'n3': {
+                        name: 'N3期',
+                        color1: '#00008B',
+                        color2: '#4B0082',
+                        blocks: {
+                            get count() { return 5 + 5 * currentHRV.HF_norm; }, // 粒子数量
+                            get size() { return 0.7 * (0.8 + 0.2 * currentHRV.SDNN_norm); }, // 保留现有实现
+                            pulseSpeed: 0.005,
+                            get particleDensity() { return 10 + 10 * currentHRV.HF_norm; }, // 粒子密度
+                            get particleSpeed() { return 0.05 - currentHRV.LFHF_norm * 0.04; }, // 粒子运动速度
+                            get trajectoryDeviation() { return 0.1 * currentHRV.LFHF_norm; }, // 粒子轨迹规则度
+                            get flickerFrequency() { return 0.1 + currentHRV.VLF_norm * 0.4; }, // 粒子闪烁频率
+                            get brightness() { return 0.7 + currentHRV.HF_norm * 0.3; } // 粒子亮度
+                        },
+                        hrvMappings: {
+                            HF_norm: [0.8, 1.0],
+                            LFHF_norm: [0, 0.2],
+                            SDNN_norm: [0.7, 0.9],
+                            VLF_norm: [0.2, 0.3]
+                        }
+                    },
+                    'rem': {
+                        name: 'REM期',
+                        color1: '#800080',
+                        color2: '#FF69B4',
+                        spirals: {
+                            get count() { return 3 + (currentHRV.HF_norm * 5) - (currentHRV.LFHF_norm * 3); },
+                            get speed() { return 0.01 + (currentHRV.LFHF_norm * 0.05) - (currentHRV.HF_norm * 0.02); },
+                            get spread() { return 100 + (currentHRV.HF_norm * 80) - (currentHRV.LFHF_norm * 40); },
+                            get particleDensity() { return 10 + (currentHRV.HF_norm * 50) - (currentHRV.LFHF_norm * 20); }
+                        },
+                        hrvMappings: {
+                            HF_norm: [0.6, 0.9],
+                            LFHF_norm: [0.1, 0.4]
+                        }
+                    }
+                };
+
+                // 真实睡眠周期结构（4个完整周期）
+                const realisticSleepStages = (() => {
+                    const cycle = [
+                        // 入睡期
+                        ...['wake', 'wake', 'n1', 'n1', 'n2', 'n2', 'n2', 'n2'],
+                        
+                        // 深睡期 (N3主导)
+                        ...Array(8).fill('n3'),
+                        ...['n2', 'n2', 'n2'],
+                        
+                        // REM期
+                        ...Array(4).fill('rem'),
+                        ...['n2', 'n2'],
+                        
+                        // 周期过渡
+                        ...['n2', 'n1']
+                    ];
+                    
+                    // 生成4个完整周期 + 觉醒期
+                    return [
+                        ...cycle,
+                        ...cycle.map(s => s === 'n3' ? 'n2' : s),  // 第二个周期N3减少
+                        ...cycle.map(s => s === 'n3' ? 'n2' : s),  // 第三个周期无N3
+                        ...Array(6).fill('rem').concat(['n2', 'n2']), // REM占比增加
+                        
+                        // 最终觉醒
+                        ...Array(4).fill('wake').concat(['n1', 'n2'])
+                    ];
+                })();
+
+                // 使用真实模拟的睡眠分期数据
+                const sleepStagesArray = realisticSleepStages;
+                
+                // 生成模拟HRV数据
+                function generateSimulatedHRVData() {
+                    return {
+                        // 清醒期参数
+                        LFHF_norm: 0.8+ Math.random() * 0.1,
+                        pNN50_norm: 0.4+ Math.random() * 0.1,
+                        LF_norm: 0.8+ Math.random() * 0.1,
+                        // N1期参数
+                        HF_norm: 0.3+ Math.random() * 0.2,
+                        RMSSD_norm: 0.25+ Math.random() * 0.1,
+                        
+                        // N2期参数
+                        SDNN_norm: 0.55+ Math.random() * 0.1,
+                        VLF_norm: 0.55+ Math.random() * 0.1,
+                        
+                        // N3期参数
+                        // REM期参数
+                    };
+                }
+                
+                // 当前HRV数据
+                let currentHRV = generateSimulatedHRVData();
+
+                // 粒子类 - 用于清醒期和REM期
+                class Particle {
+                    constructor(stage, canvasWidth, canvasHeight) {
+                        this.stage = stage;
+                        this.canvasWidth = canvasWidth;
+                        this.canvasHeight = canvasHeight;
+                        this.reset();
+                    }
+                    
+                    reset() {
+                        this.x = Math.random() * this.canvasWidth;
+                        this.y = Math.random() * this.canvasHeight;
+                        
+                        if (this.stage === 'wake') {
+                            // 1. 粒子分布范围（新增SDNN关联逻辑）
+                            // 公式：分布范围 = 画布尺寸 × (0.9 + SDNN × 0.1)
+                            const rangeFactor = 0.9 + currentHRV.SDNN_norm * 0.1; // SDNN_norm范围0-1（wake期0.4-0.8）
+                            const limitedWidth = this.canvasWidth * rangeFactor;
+                            const limitedHeight = this.canvasHeight * rangeFactor;
+                            // 计算偏移量，使粒子在画布中心区域分布
+                            const offsetX = (this.canvasWidth - limitedWidth) / 2;
+                            const offsetY = (this.canvasHeight - limitedHeight) / 2;
+                            this.x = offsetX + Math.random() * limitedWidth;
+                            this.y = offsetY + Math.random() * limitedHeight;
+
+                            // 2. 粒子速度（保持原逻辑，已匹配Excel）
+                            // 公式：particles.speed = 2.5 + 1 × LF/HF
+                            this.speedX = (Math.random() - 0.5) * (2.5 + currentHRV.LFHF_norm);
+                            this.speedY = (Math.random() - 0.5) * (2.5 + currentHRV.LFHF_norm);
+
+                            // 3. 粒子大小（新增LF关联逻辑）
+                            // 公式：size = 1 + LF × 2
+                            this.size = 1 + currentHRV.LF_norm * 2; // LF_norm范围0-1（wake期0.6-1）
+
+                            // 4. 粒子颜色透明度（新增HF关联逻辑）
+                            // 公式：transparency = 0.2 + HF × 0.8
+                            const transparency = 0.2 + currentHRV.HF_norm * 0.8; // HF_norm范围0-1（wake期0.1-0.4）
+                            this.color = `rgba(
+                                ${parseInt(sleepStages.wake.color1.substring(1, 3), 16)}, 
+                                ${parseInt(sleepStages.wake.color1.substring(3, 5), 16)}, 
+                                ${parseInt(sleepStages.wake.color1.substring(5, 7), 16)}, 
+                                ${transparency}
+                            )`;
+                        } else if (this.stage === 'rem') {
+                            // REM期粒子（螺旋飞溅的光点）
+                            this.angle = Math.random() * Math.PI * 2;
+                            this.distance = Math.random() * 50;
+                            this.centerX = this.canvasWidth / 2;
+                            this.centerY = this.canvasHeight / 2;
+                            this.size = Math.random() * 1.5 + 0.5;
+                            this.speed = Math.random() * 0.05 + 0.01;
+                            this.color = `rgba(${parseInt(sleepStages.rem.color2.substring(1, 3), 16)}, 
+                                               ${parseInt(sleepStages.rem.color2.substring(3, 5), 16)}, 
+                                               ${parseInt(sleepStages.rem.color2.substring(5, 7), 16)}, 
+                                               ${Math.random() * 0.7 + 0.3})`;
+                        }
+                    }
+                    
+                    update() {
+                        if (this.stage === 'wake') {
+                            // 清醒期粒子运动
+                            this.x += this.speedX;
+                            this.y += this.speedY;
+                            
+                            // 边界检查
+                            if (this.x < 0 || this.x > this.canvasWidth) this.speedX = -this.speedX;
+                            if (this.y < 0 || this.y > this.canvasHeight) this.speedY = -this.speedY;
+                        } else if (this.stage === 'rem') {
+                            // REM期粒子螺旋运动
+                            this.angle += this.speed;
+                            this.distance += 0.5;
+                            
+                            // 计算新位置
+                            this.x = this.centerX + Math.cos(this.angle) * this.distance;
+                            this.y = this.centerY + Math.sin(this.angle) * this.distance;
+                            
+                            // 如果粒子离开画布，重置
+                            if (this.x < 0 || this.x > this.canvasWidth || this.y < 0 || this.y > this.canvasHeight) {
+                                this.reset();
+                            }
+                        }
+                    }
+                    
+                    draw(ctx) {
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.fillStyle = this.color;
+                        ctx.fill();
+                    }
+                }
+                
+                // 线条类 - 用于N1期
+                class Stream {
+                    constructor(canvasWidth, canvasHeight) {
+                        this.canvasWidth = canvasWidth;
+                        this.canvasHeight = canvasHeight;
+                        this.reset();
+                    }
+                    
+                    reset() {
+                        this.x = Math.random() * this.canvasWidth;
+                        this.y = Math.random() * this.canvasHeight;
+                        this.points = [{x: this.x, y: this.y}];
+
+                        // 修正：线条宽度使用Excel对应关系（原随机值逻辑删除）
+                        this.width = sleepStages.n1.streams.width; 
+        
+                        // 线条速度（保持原逻辑，已匹配Excel）
+                        this.speedX = (Math.random() - 0.5) * sleepStages.n1.streams.speed;
+                        this.speedY = (Math.random() - 0.5) * sleepStages.n1.streams.speed; 
+        
+                        this.maxPoints = 50;
+                        // 分裂概率（保持原逻辑，已匹配Excel）
+                        this.splitChance = sleepStages.n1.streams.splitRate; 
+        
+                        this.isSplit = false;
+                        this.children = [];
+                        
+                        // 计算当前颜色（在金色和淡青蓝之间插值）
+                        const gold = {
+                            r: parseInt(sleepStages.n1.color1.substring(1, 3), 16),
+                            g: parseInt(sleepStages.n1.color1.substring(3, 5), 16),
+                            b: parseInt(sleepStages.n1.color1.substring(5, 7), 16)
+                        };
+                        
+                        const blue = {
+                            r: parseInt(sleepStages.n1.color2.substring(1, 3), 16),
+                            g: parseInt(sleepStages.n1.color2.substring(3, 5), 16),
+                            b: parseInt(sleepStages.n1.color2.substring(5, 7), 16)
+                        };
+                        
+                        // 随机颜色位置（0-1）
+                        const colorPos = Math.random();
+                        this.color = `rgba(
+                            ${Math.floor(gold.r + (blue.r - gold.r) * colorPos)},
+                            ${Math.floor(gold.g + (blue.g - gold.g) * colorPos)},
+                            ${Math.floor(gold.b + (blue.b - gold.b) * colorPos)},
+                            0.7
+                        )`;
+                    }
+                    
+                    update() {
+                        // 添加新点
+                        this.x += this.speedX;
+                        this.y += this.speedY;
+                        this.points.push({x: this.x, y: this.y});
+                        
+                        // 限制点的数量
+                        if (this.points.length > this.maxPoints) {
+                            this.points.shift();
+                        }
+                        
+                        // 分裂检查
+                        if (!this.isSplit && Math.random() < this.splitChance) {
+                            this.isSplit = true;
+                            
+                            // 创建两个子线条
+                            for (let i = 0; i < 2; i++) {
+                                const child = new Stream(this.canvasWidth, this.canvasHeight);
+                                child.x = this.x;
+                                child.y = this.y;
+                                child.points = [{x: this.x, y: this.y}];
+                                child.speedX = (Math.random() - 0.5) * sleepStages.n1.streams.speed * 0.8;
+                                child.speedY = (Math.random() - 0.5) * sleepStages.n1.streams.speed * 0.8;
+                                child.width = this.width * 0.7;
+                                this.children.push(child);
+                            }
+                        }
+                        
+                        // 更新子线条
+                        this.children.forEach(child => child.update());
+                    }
+                    
+                    draw(ctx) {
+                        // 绘制主线条
+                        ctx.beginPath();
+                        ctx.moveTo(this.points[0].x, this.points[0].y);
+                        
+                        for (let i = 1; i < this.points.length; i++) {
+                            ctx.lineTo(this.points[i].x, this.points[i].y);
+                        }
+                        
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = this.width;
+                        ctx.stroke();
+                        
+                        // 绘制子线条
+                        this.children.forEach(child => child.draw(ctx));
+                    }
+                }
+                
+                // 波纹类 - 用于N2期
+                class Wave {
+                    constructor(index, canvasWidth, canvasHeight) {
+                        this.index = index;
+                        this.canvasWidth = canvasWidth;
+                        this.canvasHeight = canvasHeight;
+                        this.reset();
+                    }
+                    
+                    reset() {
+                        // 修正1：波纹振幅直接使用Excel公式结果（移除索引系数）
+                        this.amplitude = sleepStages.n2.waves.amplitude;
+                        
+                        // 修正2：波纹频率直接使用Excel公式结果（移除索引系数）
+                        this.frequency = sleepStages.n2.waves.frequency;
+                        
+                        this.phase = Math.random() * Math.PI * 2;
+                        this.speed = 0.02; // 简化速度为固定值（原索引相关系数无实际意义）
+                        this.height = this.canvasHeight / (sleepStages.n2.waves.count + 1) * (this.index + 1);
+                        this.ripples = [];
+                        
+                        // 计算当前颜色（在雾蓝色和浅灰紫之间插值）
+                        const blue = {
+                            r: parseInt(sleepStages.n2.color1.substring(1, 3), 16),
+                            g: parseInt(sleepStages.n2.color1.substring(3, 5), 16),
+                            b: parseInt(sleepStages.n2.color1.substring(5, 7), 16)
+                        };
+                        
+                        const purple = {
+                            r: parseInt(sleepStages.n2.color2.substring(1, 3), 16),
+                            g: parseInt(sleepStages.n2.color2.substring(3, 5), 16),
+                            b: parseInt(sleepStages.n2.color2.substring(5, 7), 16)
+                        };
+                        
+                        const colorPos = this.index / (sleepStages.n2.waves.count - 1);
+                        this.color = `rgba(
+                            ${Math.floor(blue.r + (purple.r - blue.r) * colorPos)},
+                            ${Math.floor(blue.g + (purple.g - blue.g) * colorPos)},
+                            ${Math.floor(blue.b + (purple.b - blue.b) * colorPos)},
+                            0.4
+                        )`;
+                    }
+                    
+                    update() {
+                        this.phase += this.speed;
+                        
+                        // 随机创建涟漪
+                        if (Math.random() < sleepStages.n2.waves.rippleRate) {
+                            this.ripples.push({
+                                x: Math.random() * this.canvasWidth,
+                                radius: 0,
+                                maxRadius: 100 * (0.5 + Math.random() * 0.5),
+                                alpha: 0.5
+                            });
+                        }
+                        
+                        // 更新涟漪
+                        for (let i = this.ripples.length - 1; i >= 0; i--) {
+                            const ripple = this.ripples[i];
+                            ripple.radius += 1;
+                            ripple.alpha -= 0.01;
+                            
+                            if (ripple.alpha <= 0) {
+                                this.ripples.splice(i, 1);
+                            }
+                        }
+                    }
+                    
+                    draw(ctx) {
+                        // 绘制波浪线
+                        ctx.beginPath();
+                        
+                        for (let x = 0; x <= this.canvasWidth; x += 5) {
+                            const y = this.height + Math.sin(x * this.frequency + this.phase) * this.amplitude;
+                            
+                            if (x === 0) {
+                                ctx.moveTo(x, y);
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                        }
+                        
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                        
+                        // 绘制涟漪
+                        this.ripples.forEach(ripple => {
+                            ctx.beginPath();
+                            ctx.arc(ripple.x, this.height, ripple.radius, 0, Math.PI * 2);
+                            ctx.strokeStyle = `rgba(
+                                ${parseInt(this.color.substring(5, 8))},
+                                ${parseInt(this.color.substring(10, 13))},
+                                ${parseInt(this.color.substring(15, 18))},
+                                ${ripple.alpha}
+                            )`;
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+                        });
+                    }
+                }
+                
+                // 色块类 - 用于N3期
+                class Block {
+                    constructor(index, canvasWidth, canvasHeight) {
+                        this.index = index;
+                        this.canvasWidth = canvasWidth;
+                        this.canvasHeight = canvasHeight;
+                        this.reset();
+                    }
+                    
+                    reset() {
+                        this.size = this.canvasWidth * 0.3 * (0.7 + this.index * 0.15);
+                        this.x = this.canvasWidth / 2;
+                        this.y = this.canvasHeight / 2;
+                        this.pulsePhase = Math.random() * Math.PI * 2;
+                        this.pulseSpeed = sleepStages.n3.blocks.pulseSpeed * (0.8 + this.index * 0.2);
+                        this.particles = [];
+                        
+                        // 创建内部粒子
+                        // 1. 粒子密度（修正公式：Excel=5+5×HF）
+                        const particleCount = sleepStages.n3.blocks.particleDensity; 
+                        for (let i = 0; i < particleCount; i++) {
+                            // 4. 粒子分布范围（Excel=80% + SDNN×20%）
+                            const rangeFactor = 0.8 + currentHRV.SDNN_norm * 0.2; // N3期SDNN=0.7-0.9 → 0.94-0.98
+                            const maxOffset = this.size * rangeFactor * 0.5; // 半范围
+            
+                            // 2. 粒子运动速度（Excel=0.05 - LF/HF×0.04）
+                            const baseSpeed = 0.05 - currentHRV.LFHF_norm * 0.04; // N3期LF/HF=0-0.2 → 0.042-0.05
+            
+                            // 3. 粒子轨迹规则度（Excel=偏差值=0.1×LF/HF）
+                            const deviation = 0.1 * currentHRV.LFHF_norm; // N3期偏差0-0.02
+                            
+                            this.particles.push({
+                                x: this.x + (Math.random() - 0.5) * 2 * maxOffset, // 限制在分布范围内
+                                y: this.y + (Math.random() - 0.5) * 2 * maxOffset,
+                                speedX: (Math.random() - 0.5) * 2 * baseSpeed, // 速度受LF/HF控制
+                                speedY: (Math.random() - 0.5) * 2 * baseSpeed,
+                                deviation: deviation, // 轨迹偏差值
+                                flashPhase: Math.random() * Math.PI * 2, // 闪烁相位（用于频率控制）
+                                size: Math.random() * 0.5 + 0.8
+                            });
+                        }               
+                        
+                        // 计算当前颜色（在深海蓝和暗靛色之间插值）
+                        const deepBlue = {
+                            r: parseInt(sleepStages.n3.color1.substring(1, 3), 16),
+                            g: parseInt(sleepStages.n3.color1.substring(3, 5), 16),
+                            b: parseInt(sleepStages.n3.color1.substring(5, 7), 16)
+                        };
+                        
+                        const indigo = {
+                            r: parseInt(sleepStages.n3.color2.substring(1, 3), 16),
+                            g: parseInt(sleepStages.n3.color2.substring(3, 5), 16),
+                            b: parseInt(sleepStages.n3.color2.substring(5, 7), 16)
+                        };
+                        
+                        const colorPos = this.index / (sleepStages.n3.blocks.count - 1);
+                        this.color = `rgba(
+                            ${Math.floor(deepBlue.r + (indigo.r - deepBlue.r) * colorPos)},
+                            ${Math.floor(deepBlue.g + (indigo.g - deepBlue.g) * colorPos)},
+                            ${Math.floor(deepBlue.b + (indigo.b - deepBlue.b) * colorPos)},
+                            0.6
+                        )`;
+                        
+                        this.edgeColor = `rgba(
+                            ${Math.floor(deepBlue.r + (indigo.r - deepBlue.r) * colorPos)},
+                            ${Math.floor(deepBlue.g + (indigo.g - deepBlue.g) * colorPos)},
+                            ${Math.floor(deepBlue.b + (indigo.b - deepBlue.b) * colorPos)},
+                            0.3
+                        )`;
+                    }
+                    
+                    update() {
+                        this.pulsePhase += this.pulseSpeed;
+                        this.time += 0.01; // 时间累加，用于闪烁计算
+                        
+                        this.particles.forEach(particle => {
+                            // 3. 轨迹规则度：基于偏差值添加随机扰动（偏差越小越规则）
+                            const perturbX = (Math.random() - 0.5) * 2 * particle.deviation;
+                            const perturbY = (Math.random() - 0.5) * 2 * particle.deviation;
+                            
+                            // 更新位置（速度+扰动）
+                            particle.x += particle.speedX + perturbX;
+                            particle.y += particle.speedY + perturbY;
+            
+                            // 边界检查（基于分布范围）
+                            const rangeFactor = 0.8 + currentHRV.SDNN_norm * 0.2;
+                            const maxOffset = this.size * rangeFactor * 0.5;
+                            if (Math.abs(particle.x - this.x) > maxOffset) particle.speedX = -particle.speedX;
+                            if (Math.abs(particle.y - this.y) > maxOffset) particle.speedY = -particle.speedY;
+            
+                            // 5. 闪烁频率：Excel=0.1 + VLF×0.4（N3期0.18-0.22Hz）
+                            const flashFrequency = 0.1 + currentHRV.VLF_norm * 0.4;
+                            particle.flashPhase += flashFrequency; // 相位随频率更新
+                        });
+                    }
+                    
+                    draw(ctx) {
+                        const pulseFactor = (Math.sin(this.pulsePhase) + 1) * 0.1 + 1;
+                        const currentSize = this.size * pulseFactor;
+                        
+                        // 绘制色块
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, currentSize, 0, Math.PI * 2);
+                        
+                        // 创建径向渐变
+                        const gradient = ctx.createRadialGradient(
+                            this.x, this.y, 0,
+                            this.x, this.y, currentSize
+                        );
+                        
+                        gradient.addColorStop(0, this.color);
+                        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.fill();
+                        
+                        // 绘制边缘光晕
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, currentSize * 1.1, 0, Math.PI * 2);
+                        ctx.strokeStyle = this.edgeColor;
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        
+                        // 绘制内部粒子
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                        this.particles.forEach(particle => {
+                            ctx.beginPath();
+                            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                            ctx.fill();
+                        });
+                    }
+                }
+                
+                // 螺旋类 - 用于REM期
+                class Spiral {
+                    constructor(index, canvasWidth, canvasHeight) {
+                        this.index = index;
+                        this.canvasWidth = canvasWidth;
+                        this.canvasHeight = canvasHeight;
+                        this.reset();
+                    }
+                    
+                    reset() {
+                        this.centerX = this.canvasWidth / 2;
+                        this.centerY = this.canvasHeight / 2;
+                        this.angle = Math.random() * Math.PI * 2;
+                        // 修正2：螺旋旋转速度直接使用Excel公式结果（移除索引系数）
+                        this.speed = sleepStages.rem.spirals.speed;
+                        
+                        this.particles = [];
+
+                        // 修正3：螺旋扩展范围直接使用Excel公式结果（移除索引系数）
+                        this.spread = sleepStages.rem.spirals.spread;
+                        
+                        // 创建螺旋上的粒子
+                        for (let i = 0; i < sleepStages.rem.spirals.particleDensity; i++) {
+                            const angle = (i / sleepStages.rem.spirals.particleDensity) * Math.PI * 2;
+                            const distance = i * (this.spread / sleepStages.rem.spirals.particleDensity);
+                            
+                            this.particles.push({
+                                angle: angle,
+                                distance: distance,
+                                size: Math.random() * 1.5 + 0.5,
+                                alpha: (1 - i / sleepStages.rem.spirals.particleDensity) * 0.7 + 0.3
+                            });
+                        }
+                        
+                        // 计算当前颜色（在绛紫和粉紫之间插值）
+                        const purple = {
+                            r: parseInt(sleepStages.rem.color1.substring(1, 3), 16),
+                            g: parseInt(sleepStages.rem.color1.substring(3, 5), 16),
+                            b: parseInt(sleepStages.rem.color1.substring(5, 7), 16)
+                        };
+                        
+                        const pink = {
+                            r: parseInt(sleepStages.rem.color2.substring(1, 3), 16),
+                            g: parseInt(sleepStages.rem.color2.substring(3, 5), 16),
+                            b: parseInt(sleepStages.rem.color2.substring(5, 7), 16)
+                        };
+                        
+                        const colorPos = this.index / (sleepStages.rem.spirals.count - 1);
+                        this.color = `rgba(
+                            ${Math.floor(purple.r + (pink.r - purple.r) * colorPos)},
+                            ${Math.floor(purple.g + (pink.g - purple.g) * colorPos)},
+                            ${Math.floor(purple.b + (pink.b - purple.b) * colorPos)},
+                            0.8
+                        )`;
+                    }
+                    
+                    update() {
+                        this.angle += this.speed;
+                        
+                        // 更新粒子位置
+                        this.particles.forEach(particle => {
+                            particle.angle += this.speed * 0.5;
+                            particle.distance += 0.5;
+                            
+                            // 如果粒子走得太远，重置
+                            if (particle.distance > this.spread) {
+                                particle.distance = 0;
+                                particle.angle = Math.random() * Math.PI * 2;
+                            }
+                        });
+                    }
+                    
+                    draw(ctx) {
+                        // 绘制螺旋线
+                        ctx.beginPath();
+                        
+                        this.particles.forEach((particle, i) => {
+                            const x = this.centerX + Math.cos(particle.angle + this.angle) * particle.distance;
+                            const y = this.centerY + Math.sin(particle.angle + this.angle) * particle.distance;
+                            
+                            if (i === 0) {
+                                ctx.moveTo(x, y);
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                        });
+                        
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                        
+                        // 绘制粒子
+                        this.particles.forEach(particle => {
+                            const x = this.centerX + Math.cos(particle.angle + this.angle) * particle.distance;
+                            const y = this.centerY + Math.sin(particle.angle + this.angle) * particle.distance;
+                            
+                            ctx.beginPath();
+                            ctx.arc(x, y, particle.size, 0, Math.PI * 2);
+                            ctx.fillStyle = `rgba(
+                                ${parseInt(this.color.substring(5, 8))},
+                                ${parseInt(this.color.substring(10, 13))},
+                                ${parseInt(this.color.substring(15, 18))},
+                                ${particle.alpha}
+                            )`;
+                            ctx.fill();
+                        });
+                    }
+                }
+
+                // 更新当前阶段显示
+                function updateCurrentStageDisplay() {
+                    try {
+                        const currentStageElement = document.getElementById('currentStage');
+                        if (currentStageElement) {
+                            currentStageElement.textContent = sleepStages[currentStage].name;
+                        } else {
+                            console.error('无法找到当前阶段显示元素');
+                        }
+
+                        // 更新指示点颜色
+                        const indicators = {
+                            'w': document.getElementById('indicator-w'),
+                            'n1': document.getElementById('indicator-n1'),
+                            'n2': document.getElementById('indicator-n2'),
+                            'n3': document.getElementById('indicator-n3'),
+                            'rem': document.getElementById('indicator-rem')
+                        };
+
+                        Object.keys(indicators).forEach(key => {
+                            if (indicators[key]) {
+                                if (key === currentStage) {
+                                    indicators[key].style.backgroundColor = sleepStages[currentStage].color1 + '/70';
+                                } else {
+                                    indicators[key].style.backgroundColor = sleepStages[key].color1 + '/30';
+                                }
+                            } else {
+                                console.error(`无法找到指示点元素: ${key}`);
+                            }
+                        });
+
+                        // 更新按钮样式
+                        const buttons = {
+                            'wake': document.getElementById('btnWake'),
+                            'n1': document.getElementById('btnN1'),
+                            'n2': document.getElementById('btnN2'),
+                            'n3': document.getElementById('btnN3'),
+                            'rem': document.getElementById('btnREM')
+                        };
+
+                        Object.keys(buttons).forEach(key => {
+                            if (buttons[key]) {
+                                if (key === currentStage) {
+                                    buttons[key].classList.add('active-btn');
+                                } else {
+                                    buttons[key].classList.remove('active-btn');
+                                }
+                            } else {
+                                console.error(`无法找到按钮元素: ${key}`);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('更新当前阶段显示时出错:', error);
+                    }
+                }
+
+                // 切换睡眠阶段
+                function switchStage(newStage) {
+                    try {
+                        if (newStage !== currentStage) {
+                            console.log(`切换到阶段: ${newStage}`);
+                            transitionProgress = 0;
+                            currentStage = newStage;
+                            
+                            // 更新当前HRV数据（模拟）
+                            currentHRV = generateSimulatedHRVData();
+                            
+                            updateCurrentStageDisplay();
+                            initObjects(); // 重新初始化对象
+                            
+                            // 如果是手动切换，重置自动切换计时器
+                            if (stageSwitchTimeoutId) {
+                                clearTimeout(stageSwitchTimeoutId);
+                                stageSwitchTimeoutId = setTimeout(scheduleStageSwitch, 5000);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('切换阶段时出错:', error);
+                    }
+                }
+
+                // 定时切换睡眠阶段
+                function scheduleStageSwitch() {
+                    try {
+                        if (currentStageIndex < sleepStagesArray.length - 1) {
+                            currentStageIndex++;
+                            const newStage = sleepStagesArray[currentStageIndex];
+                            switchStage(newStage);
+                            stageSwitchTimeoutId = setTimeout(scheduleStageSwitch, 5000); // 每5秒切换一次
+                        } else {
+                            // 循环展示
+                            console.log('完成一个完整的睡眠周期，重新开始...');
+                            currentStageIndex = 0;
+                            stageSwitchTimeoutId = setTimeout(scheduleStageSwitch, 5000);
+                        }
+                    } catch (error) {
+                        console.error('定时切换阶段时出错:', error);
+                    }
+                }
+
+                // 初始化对象数组
+                function initObjects() {
+                    try {
+                        particles = [];
+                        streams = [];
+                        waves = [];
+                        blocks = [];
+                        spirals = [];
+
+                        if (currentStage === 'wake') {
+                            for (let i = 0; i < sleepStages.wake.particles.count; i++) {
+                                particles.push(new Particle('wake', mainCanvas.width, mainCanvas.height));
+                            }
+                        } else if (currentStage === 'n1') {
+                            for (let i = 0; i < sleepStages.n1.streams.count; i++) {
+                                streams.push(new Stream(mainCanvas.width, mainCanvas.height));
+                            }
+                        } else if (currentStage === 'n2') {
+                            for (let i = 0; i < sleepStages.n2.waves.count; i++) {
+                                waves.push(new Wave(i, mainCanvas.width, mainCanvas.height));
+                            }
+                        } else if (currentStage === 'n3') {
+                            for (let i = 0; i < sleepStages.n3.blocks.count; i++) {
+                                blocks.push(new Block(i, mainCanvas.width, mainCanvas.height));
+                            }
+                        } else if (currentStage === 'rem') {
+                            for (let i = 0; i < sleepStages.rem.spirals.count; i++) {
+                                spirals.push(new Spiral(i, mainCanvas.width, mainCanvas.height));
+                            }
+                        }
+                    } catch (error) {
+                        console.error('初始化对象时出错:', error);
+                    }
+                }
+
+                // 调整主Canvas尺寸
+                function resizeMainCanvas() {
+                    try {
+                        if (mainCanvas) {
+                            mainCanvas.width = mainCanvas.offsetWidth;
+                            mainCanvas.height = mainCanvas.offsetHeight;
+                            console.log(`Canvas尺寸已调整为: ${mainCanvas.width} x ${mainCanvas.height}`);
+                            
+                            // 重新初始化对象以适应新尺寸
+                            initObjects();
+                        } else {
+                            console.error('无法调整Canvas尺寸: mainCanvas未定义');
+                        }
+                    } catch (error) {
+                        console.error('调整Canvas尺寸时出错:', error);
+                    }
+                }
+
+                // 动画循环
+                function animate() {
+                    try {
+                        if (mainCtx) {
+                            mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+
+                            if (currentStage === 'wake') {
+                                particles.forEach(particle => {
+                                    particle.update();
+                                    particle.draw(mainCtx);
+                                });
+                            } else if (currentStage === 'n1') {
+                                streams.forEach(stream => {
+                                    stream.update();
+                                    stream.draw(mainCtx);
+                                });
+                            } else if (currentStage === 'n2') {
+                                waves.forEach(wave => {
+                                    wave.update();
+                                    wave.draw(mainCtx);
+                                });
+                            } else if (currentStage === 'n3') {
+                                blocks.forEach(block => {
+                                    block.update();
+                                    block.draw(mainCtx);
+                                });
+                            } else if (currentStage === 'rem') {
+                                spirals.forEach(spiral => {
+                                    spiral.update();
+                                    spiral.draw(mainCtx);
+                                });
+                            }
+
+                            // 更新过渡进度
+                            if (transitionProgress < 1) {
+                                transitionProgress += 0.01;
+                            }
+                        } else {
+                            console.error('无法绘制动画: mainCtx未定义');
+                        }
+
+                        animationFrameId = requestAnimationFrame(animate);
+                    } catch (error) {
+                        console.error('动画循环出错:', error);
+                    }
+                }
+
+                // 初始化迷你画布
+                function initMiniCanvases() {
+                    try {
+                        if (miniCanvasesInitialized) {
+                            return; // 已经初始化过，不再重复初始化
+                        }
+                        
+                        console.log('初始化迷你画布...');
+                        
+                        // 清醒期迷你画布
+                        const miniWake = document.getElementById('miniWake');
+                        if (miniWake) {
+                            const miniWakeCtx = miniWake.getContext('2d');
+                            miniWake.width = miniWake.offsetWidth;
+                            miniWake.height = miniWake.offsetHeight;
+                            
+                            let wakeParticles = [];
+                            for (let i = 0; i < 50; i++) {
+                                wakeParticles.push(new Particle('wake', miniWake.width, miniWake.height));
+                            }
+                            
+                            function animateWake() {
+                                if (miniWakeCtx) {
+                                    miniWakeCtx.clearRect(0, 0, miniWake.width, miniWake.height);
+                                    wakeParticles.forEach(p => { p.update(); p.draw(miniWakeCtx); });
+                                }
+                                miniCanvasAnimations['wake'] = requestAnimationFrame(animateWake);
+                            }
+                            animateWake();
+                        } else {
+                            console.error('无法找到清醒期迷你画布');
+                        }
+                        
+                        // N1期迷你画布
+                        const miniN1 = document.getElementById('miniN1');
+                        if (miniN1) {
+                            const miniN1Ctx = miniN1.getContext('2d');
+                            miniN1.width = miniN1.offsetWidth;
+                            miniN1.height = miniN1.offsetHeight;
+                            
+                            let n1Streams = [];
+                            for (let i = 0; i < 10; i++) {
+                                n1Streams.push(new Stream(miniN1.width, miniN1.height));
+                            }
+                            
+                            function animateN1() {
+                                if (miniN1Ctx) {
+                                    miniN1Ctx.clearRect(0, 0, miniN1.width, miniN1.height);
+                                    n1Streams.forEach(s => { s.update(); s.draw(miniN1Ctx); });
+                                }
+                                miniCanvasAnimations['n1'] = requestAnimationFrame(animateN1);
+                            }
+                            animateN1();
+                        } else {
+                            console.error('无法找到N1期迷你画布');
+                        }
+                        
+                        // N2期迷你画布
+                        const miniN2 = document.getElementById('miniN2');
+                        if (miniN2) {
+                            const miniN2Ctx = miniN2.getContext('2d');
+                            miniN2.width = miniN2.offsetWidth;
+                            miniN2.height = miniN2.offsetHeight;
+                            
+                            let n2Waves = [];
+                            for (let i = 0; i < 3; i++) {
+                                n2Waves.push(new Wave(i, miniN2.width, miniN2.height));
+                            }
+                            
+                            function animateN2() {
+                                if (miniN2Ctx) {
+                                    miniN2Ctx.clearRect(0, 0, miniN2.width, miniN2.height);
+                                    n2Waves.forEach(w => { w.update(); w.draw(miniN2Ctx); });
+                                }
+                                miniCanvasAnimations['n2'] = requestAnimationFrame(animateN2);
+                            }
+                            animateN2();
+                        } else {
+                            console.error('无法找到N2期迷你画布');
+                        }
+                        
+                        // N3期迷你画布
+                        const miniN3 = document.getElementById('miniN3');
+                        if (miniN3) {
+                            const miniN3Ctx = miniN3.getContext('2d');
+                            miniN3.width = miniN3.offsetWidth;
+                            miniN3.height = miniN3.offsetHeight;
+                            
+                            let n3Blocks = [];
+                            for (let i = 0; i < 2; i++) {
+                                n3Blocks.push(new Block(i, miniN3.width, miniN3.height));
+                            }
+                            
+                            function animateN3() {
+                                if (miniN3Ctx) {
+                                    miniN3Ctx.clearRect(0, 0, miniN3.width, miniN3.height);
+                                    n3Blocks.forEach(b => { b.update(); b.draw(miniN3Ctx); });
+                                }
+                                miniCanvasAnimations['n3'] = requestAnimationFrame(animateN3);
+                            }
+                            animateN3();
+                        } else {
+                            console.error('无法找到N3期迷你画布');
+                        }
+                        
+                        // REM期迷你画布
+                        const miniREM = document.getElementById('miniREM');
+                        if (miniREM) {
+                            const miniREMCtx = miniREM.getContext('2d');
+                            miniREM.width = miniREM.offsetWidth;
+                            miniREM.height = miniREM.offsetHeight;
+                            
+                            let remSpirals = [];
+                            for (let i = 0; i < 3; i++) {
+                                remSpirals.push(new Spiral(i, miniREM.width, miniREM.height));
+                            }
+                            
+                            function animateREM() {
+                                if (miniREMCtx) {
+                                    miniREMCtx.clearRect(0, 0, miniREM.width, miniREM.height);
+                                    remSpirals.forEach(s => { s.update(); s.draw(miniREMCtx); });
+                                }
+                                miniCanvasAnimations['rem'] = requestAnimationFrame(animateREM);
+                            }
+                            animateREM();
+                        } else {
+                            console.error('无法找到REM期迷你画布');
+                        }
+                        
+                        miniCanvasesInitialized = true;
+                    } catch (error) {
+                        console.error('初始化迷你画布时出错:', error);
+                    }
+                }
+
+                // 清理迷你画布动画
+                function cleanupMiniCanvases() {
+                    try {
+                        Object.values(miniCanvasAnimations).forEach(id => {
+                            cancelAnimationFrame(id);
+                        });
+                        miniCanvasAnimations = {};
+                        miniCanvasesInitialized = false;
+                        console.log('已清理迷你画布动画');
+                    } catch (error) {
+                        console.error('清理迷你画布动画时出错:', error);
+                    }
+                }
+
+                // 初始化应用
+                initObjects();
+                updateCurrentStageDisplay();
+                animate();
+                scheduleStageSwitch();
+                
+                // 设置按钮事件监听
+                try {
+                    const btnWake = document.getElementById('btnWake');
+                    if (btnWake) {
+                        btnWake.addEventListener('click', () => switchStage('wake'));
+                    } else {
+                        console.error('无法找到清醒期按钮');
+                    }
+                    
+                    const btnN1 = document.getElementById('btnN1');
+                    if (btnN1) {
+                        btnN1.addEventListener('click', () => switchStage('n1'));
+                    } else {
+                        console.error('无法找到N1期按钮');
+                    }
+                    
+                    const btnN2 = document.getElementById('btnN2');
+                    if (btnN2) {
+                        btnN2.addEventListener('click', () => switchStage('n2'));
+                    } else {
+                        console.error('无法找到N2期按钮');
+                    }
+                    
+                    const btnN3 = document.getElementById('btnN3');
+                    if (btnN3) {
+                        btnN3.addEventListener('click', () => switchStage('n3'));
+                    } else {
+                        console.error('无法找到N3期按钮');
+                    }
+                    
+                    const btnREM = document.getElementById('btnREM');
+                    if (btnREM) {
+                        btnREM.addEventListener('click', () => switchStage('rem'));
+                    } else {
+                        console.error('无法找到REM期按钮');
+                    }
+                    
+                    const btnAll = document.getElementById('btnAll');
+                    if (btnAll) {
+                        btnAll.addEventListener('click', () => {
+                            isShowingAllStages = !isShowingAllStages;
+                            const allStagesView = document.getElementById('allStagesView');
+                            
+                            if (allStagesView) {
+                                if (isShowingAllStages) {
+                                    allStagesView.classList.remove('hidden');
+                                    setTimeout(initMiniCanvases, 100); // 等待DOM更新完成
+                                } else {
+                                    allStagesView.classList.add('hidden');
+                                    cleanupMiniCanvases();
+                                }
+                            } else {
+                                console.error('无法找到全景展示视图');
+                            }
+                        });
+                    } else {
+                        console.error('无法找到全景展示按钮');
+                    }
+                    
+                    console.log('按钮事件监听已设置');
+                } catch (error) {
+                    console.error('设置按钮事件监听时出错:', error);
+                }
+                
+                console.log('应用初始化完成');
+            } catch (error) {
+                console.error('初始化应用时出错:', error);
+            }
+        }
+        
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', () => {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            
+            if (stageSwitchTimeoutId) {
+                clearTimeout(stageSwitchTimeoutId);
+            }
+            
+            cleanupMiniCanvases();
+        });
+    </script>
+</body>
+</html>
