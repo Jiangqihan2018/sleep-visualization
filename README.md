@@ -40,7 +40,7 @@
 
 ### 本地运行
 1. 克隆本仓库到本地
-2. 直接打开`sleep-visualization.html`文件（或项目主HTML文件）即可运行
+2. 直接打开`[sleep-visualization.html](https://github.com/Jiangqihan2018/sleep-visualization/blob/main/sleep-visualization.html)`文件（或项目主HTML文件）即可运行
 
 ### 线上部署（Gitee/GitHub）
 1. 将项目文件上传至Gitee或GitHub仓库
